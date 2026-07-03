@@ -4,13 +4,27 @@ import { SITES } from '../data/sites';
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'neverhide2024';
 
+function genCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = 'NHE-';
+  for (let i = 0; i < 5; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
 export default function AdminPage() {
   const [authed, setAuthed] = useState(sessionStorage.getItem('vip_admin_ok') === '1');
   const [pw, setPw] = useState('');
   const [error, setError] = useState('');
+  const [tab, setTab] = useState('requests'); // requests | promos
   const [requests, setRequests] = useState([]);
+  const [promos, setPromos] = useState([]);
   const [filter, setFilter] = useState('pending');
   const [loading, setLoading] = useState(false);
+
+  // new promo form
+  const [newCode, setNewCode] = useState('');
+  const [newMaxUses, setNewMaxUses] = useState('');
+  const [newNote, setNewNote] = useState('');
 
   const login = () => {
     if (pw === ADMIN_PASSWORD) {
@@ -21,7 +35,7 @@ export default function AdminPage() {
     }
   };
 
-  const load = async () => {
+  const loadRequests = async () => {
     if (!isSupabaseReady) return;
     setLoading(true);
     const { data } = await supabaseAdmin.from('unlock_requests').select('*').order('created_at', { ascending: false });
@@ -29,20 +43,46 @@ export default function AdminPage() {
     setLoading(false);
   };
 
-  useEffect(() => { if (authed) load(); }, [authed]);
+  const loadPromos = async () => {
+    if (!isSupabaseReady) return;
+    setLoading(true);
+    const { data } = await supabaseAdmin.from('promo_codes').select('*').order('created_at', { ascending: false });
+    setPromos(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (!authed) return;
+    if (tab === 'requests') loadRequests(); else loadPromos();
+  }, [authed, tab]);
 
   const approve = async (r) => {
     const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     await supabaseAdmin.from('unlock_requests').update({ status: 'approved', approved_at: new Date().toISOString(), expires_at }).eq('id', r.id);
-    load();
+    loadRequests();
   };
   const reject = async (r) => {
     await supabaseAdmin.from('unlock_requests').update({ status: 'rejected' }).eq('id', r.id);
-    load();
+    loadRequests();
+  };
+
+  const createPromo = async () => {
+    const code = (newCode.trim() || genCode()).toUpperCase();
+    const max_uses = newMaxUses.trim() ? parseInt(newMaxUses.trim(), 10) : null;
+    await supabaseAdmin.from('promo_codes').insert([{ code, max_uses, note: newNote.trim() || null, active: true }]);
+    setNewCode(''); setNewMaxUses(''); setNewNote('');
+    loadPromos();
+  };
+  const togglePromo = async (p) => {
+    await supabaseAdmin.from('promo_codes').update({ active: !p.active }).eq('id', p.id);
+    loadPromos();
+  };
+  const deletePromo = async (p) => {
+    await supabaseAdmin.from('promo_codes').delete().eq('id', p.id);
+    loadPromos();
   };
 
   const waLink = (r, approvedNow) => {
-    const site = SITES.find(s => s.key === r.site_key);
     const msg = approvedNow
       ? `Hi ${r.full_name}! 🎉 Your VIP access to ${r.site_name} is now ACTIVE for the next 24 hours. Enjoy! - Never Hide Tech Empire`
       : `Hi ${r.full_name}, following up on your VIP access request for ${r.site_name}.`;
@@ -75,67 +115,131 @@ export default function AdminPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#070a12', padding: '24px 16px 60px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
-        <h2 style={{ color: '#fff', marginBottom: 4 }}>🎟️ VIP Access Requests</h2>
-        <p style={{ color: '#8891a8', fontSize: 13, marginBottom: 18 }}>Approve payments to instantly unlock 24H access + notify via WhatsApp.</p>
+        <h2 style={{ color: '#fff', marginBottom: 4 }}>🎟️ VIP Access Admin</h2>
+        <p style={{ color: '#8891a8', fontSize: 13, marginBottom: 18 }}>Approve payments, or create free promo codes to give away.</p>
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
-          {['pending', 'approved', 'rejected', 'all'].map(f => (
-            <button key={f} onClick={() => setFilter(f)} style={{
-              border: '1px solid #2a3350', borderRadius: 20, padding: '8px 16px', fontSize: 13, cursor: 'pointer',
-              background: filter === f ? '#3ba7ff' : '#151b2c', color: filter === f ? '#08110a' : '#c9d1e0', fontWeight: 700,
-            }}>
-              {f === 'pending' ? `⏳ Pending (${counts.pending})` : f === 'approved' ? `✅ Approved (${counts.approved})` : f === 'rejected' ? `❌ Rejected (${counts.rejected})` : `All (${requests.length})`}
-            </button>
-          ))}
-          <button onClick={load} style={{ border: '1px solid #2a3350', borderRadius: 20, padding: '8px 16px', fontSize: 13, cursor: 'pointer', background: '#151b2c', color: '#c9d1e0' }}>
-            ↻ Refresh
-          </button>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+          <button onClick={() => setTab('requests')} style={{
+            border: '1px solid #2a3350', borderRadius: 20, padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontWeight: 700,
+            background: tab === 'requests' ? '#3ba7ff' : '#151b2c', color: tab === 'requests' ? '#08110a' : '#c9d1e0',
+          }}>💳 Payment Requests</button>
+          <button onClick={() => setTab('promos')} style={{
+            border: '1px solid #2a3350', borderRadius: 20, padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontWeight: 700,
+            background: tab === 'promos' ? '#34c471' : '#151b2c', color: tab === 'promos' ? '#08110a' : '#c9d1e0',
+          }}>🎟️ Promo Codes</button>
         </div>
 
-        {loading && <p style={{ color: '#8891a8' }}>Loading...</p>}
-        {!loading && filtered.length === 0 && <p style={{ color: '#8891a8' }}>No requests here.</p>}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {filtered.map(r => (
-            <div key={r.id} style={{ background: '#0d1220', border: '1px solid #2a3350', borderRadius: 16, padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-                <div>
-                  <span style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>{r.full_name}</span>
-                  <span style={{ color: '#8891a8', fontSize: 12.5, marginLeft: 8 }}>{r.phone}</span>
-                </div>
-                <span style={{
-                  fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 12,
-                  background: r.status === 'pending' ? '#ffb34722' : r.status === 'approved' ? '#34c47122' : '#ff6b6b22',
-                  color: r.status === 'pending' ? '#ffb347' : r.status === 'approved' ? '#34c471' : '#ff6b6b',
-                }}>{r.status.toUpperCase()}</span>
-              </div>
-              <div style={{ color: '#c9d1e0', fontSize: 13, marginBottom: 4 }}>
-                🎯 {r.site_name} {r.momo_ref && <span style={{ color: '#8891a8' }}>· Ref: {r.momo_ref}</span>}
-              </div>
-              <div style={{ color: '#8891a8', fontSize: 11.5, marginBottom: 10 }}>
-                Requested {new Date(r.created_at).toLocaleString()}
-                {r.expires_at && r.status === 'approved' && ` · Expires ${new Date(r.expires_at).toLocaleString()}`}
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {r.status === 'pending' && (
-                  <>
-                    <button onClick={() => approve(r)} style={{ border: 'none', borderRadius: 10, padding: '8px 14px', background: '#34c471', color: '#08110a', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
-                      ✅ Approve
-                    </button>
-                    <button onClick={() => reject(r)} style={{ border: 'none', borderRadius: 10, padding: '8px 14px', background: '#ff6b6b', color: '#08110a', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
-                      ❌ Reject
-                    </button>
-                  </>
-                )}
-                <a href={waLink(r, r.status === 'approved')} target="_blank" rel="noreferrer" style={{
-                  border: '1px solid #34c47155', borderRadius: 10, padding: '8px 14px', color: '#34c471', fontWeight: 700, fontSize: 12.5, textDecoration: 'none',
+        {tab === 'requests' && (
+          <>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
+              {['pending', 'approved', 'rejected', 'all'].map(f => (
+                <button key={f} onClick={() => setFilter(f)} style={{
+                  border: '1px solid #2a3350', borderRadius: 20, padding: '8px 16px', fontSize: 13, cursor: 'pointer',
+                  background: filter === f ? '#3ba7ff' : '#151b2c', color: filter === f ? '#08110a' : '#c9d1e0', fontWeight: 700,
                 }}>
-                  💬 WhatsApp
-                </a>
-              </div>
+                  {f === 'pending' ? `⏳ Pending (${counts.pending})` : f === 'approved' ? `✅ Approved (${counts.approved})` : f === 'rejected' ? `❌ Rejected (${counts.rejected})` : `All (${requests.length})`}
+                </button>
+              ))}
+              <button onClick={loadRequests} style={{ border: '1px solid #2a3350', borderRadius: 20, padding: '8px 16px', fontSize: 13, cursor: 'pointer', background: '#151b2c', color: '#c9d1e0' }}>
+                ↻ Refresh
+              </button>
             </div>
-          ))}
-        </div>
+
+            {loading && <p style={{ color: '#8891a8' }}>Loading...</p>}
+            {!loading && filtered.length === 0 && <p style={{ color: '#8891a8' }}>No requests here.</p>}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {filtered.map(r => (
+                <div key={r.id} style={{ background: '#0d1220', border: '1px solid #2a3350', borderRadius: 16, padding: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <span style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>{r.full_name}</span>
+                      <span style={{ color: '#8891a8', fontSize: 12.5, marginLeft: 8 }}>{r.phone}</span>
+                    </div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 12,
+                      background: r.status === 'pending' ? '#ffb34722' : r.status === 'approved' ? '#34c47122' : '#ff6b6b22',
+                      color: r.status === 'pending' ? '#ffb347' : r.status === 'approved' ? '#34c471' : '#ff6b6b',
+                    }}>{r.status.toUpperCase()}</span>
+                  </div>
+                  <div style={{ color: '#c9d1e0', fontSize: 13, marginBottom: 4 }}>
+                    🎯 {r.site_name} {r.momo_ref && <span style={{ color: '#8891a8' }}>· Ref: {r.momo_ref}</span>}
+                    {r.promo_code && <span style={{ color: '#34c471' }}> · 🎟️ Code: {r.promo_code}</span>}
+                  </div>
+                  <div style={{ color: '#8891a8', fontSize: 11.5, marginBottom: 10 }}>
+                    Requested {new Date(r.created_at).toLocaleString()}
+                    {r.expires_at && r.status === 'approved' && ` · Expires ${new Date(r.expires_at).toLocaleString()}`}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {r.status === 'pending' && (
+                      <>
+                        <button onClick={() => approve(r)} style={{ border: 'none', borderRadius: 10, padding: '8px 14px', background: '#34c471', color: '#08110a', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
+                          ✅ Approve
+                        </button>
+                        <button onClick={() => reject(r)} style={{ border: 'none', borderRadius: 10, padding: '8px 14px', background: '#ff6b6b', color: '#08110a', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
+                          ❌ Reject
+                        </button>
+                      </>
+                    )}
+                    <a href={waLink(r, r.status === 'approved')} target="_blank" rel="noreferrer" style={{
+                      border: '1px solid #34c47155', borderRadius: 10, padding: '8px 14px', color: '#34c471', fontWeight: 700, fontSize: 12.5, textDecoration: 'none',
+                    }}>
+                      💬 WhatsApp
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {tab === 'promos' && (
+          <>
+            <div style={{ background: '#0d1220', border: '1px solid #2a3350', borderRadius: 16, padding: 18, marginBottom: 20 }}>
+              <h3 style={{ color: '#fff', fontSize: 15, margin: '0 0 12px' }}>➕ Create Promo Code</h3>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+                <input placeholder="Code (leave blank to auto-generate)" value={newCode} onChange={e => setNewCode(e.target.value.toUpperCase())}
+                  style={{ flex: '1 1 200px', border: '1px solid #2a3350', borderRadius: 10, padding: '10px 12px', background: '#151b2c', color: '#fff', fontSize: 13.5, textTransform: 'uppercase' }} />
+                <input placeholder="Max uses (blank = unlimited)" value={newMaxUses} onChange={e => setNewMaxUses(e.target.value.replace(/[^0-9]/g, ''))}
+                  style={{ flex: '1 1 140px', border: '1px solid #2a3350', borderRadius: 10, padding: '10px 12px', background: '#151b2c', color: '#fff', fontSize: 13.5 }} />
+              </div>
+              <input placeholder="Note (e.g. Facebook giveaway July)" value={newNote} onChange={e => setNewNote(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #2a3350', borderRadius: 10, padding: '10px 12px', background: '#151b2c', color: '#fff', fontSize: 13.5, marginBottom: 12 }} />
+              <button onClick={createPromo} style={{ border: 'none', borderRadius: 10, padding: '10px 18px', background: '#34c471', color: '#08110a', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+                🎟️ Create Code
+              </button>
+            </div>
+
+            {loading && <p style={{ color: '#8891a8' }}>Loading...</p>}
+            {!loading && promos.length === 0 && <p style={{ color: '#8891a8' }}>No promo codes yet — create one above.</p>}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {promos.map(p => (
+                <div key={p.id} style={{ background: '#0d1220', border: '1px solid #2a3350', borderRadius: 14, padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                  <div>
+                    <div style={{ color: '#ffcc33', fontWeight: 800, fontSize: 15, letterSpacing: 1 }}>{p.code}</div>
+                    <div style={{ color: '#8891a8', fontSize: 12 }}>
+                      Used {p.uses_count}{p.max_uses ? ` / ${p.max_uses}` : ' (unlimited)'}
+                      {p.note ? ` · ${p.note}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 12,
+                      background: p.active ? '#34c47122' : '#ff6b6b22', color: p.active ? '#34c471' : '#ff6b6b',
+                    }}>{p.active ? 'ACTIVE' : 'DISABLED'}</span>
+                    <button onClick={() => togglePromo(p)} style={{ border: '1px solid #2a3350', borderRadius: 10, padding: '7px 12px', background: '#151b2c', color: '#c9d1e0', fontSize: 12, cursor: 'pointer' }}>
+                      {p.active ? 'Disable' : 'Enable'}
+                    </button>
+                    <button onClick={() => deletePromo(p)} style={{ border: '1px solid #ff6b6b55', borderRadius: 10, padding: '7px 12px', background: 'transparent', color: '#ff6b6b', fontSize: 12, cursor: 'pointer' }}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
