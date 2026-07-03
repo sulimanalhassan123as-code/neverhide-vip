@@ -22,7 +22,7 @@ alter table public.unlock_requests enable row level security;
 drop policy if exists "Anyone can submit unlock requests" on public.unlock_requests;
 create policy "Anyone can submit unlock requests"
   on public.unlock_requests for insert
-  to anon
+  to public
   with check (true);
 
 -- ============================================
@@ -43,10 +43,6 @@ create table if not exists public.promo_codes (
 alter table public.promo_codes enable row level security;
 -- No direct public access — only reachable through the redeem_promo_code() function below,
 -- and through the admin panel (which uses the service role key).
-
--- ============================================
--- Redeem function — validates + instantly approves 24H access
--- ============================================
 
 create or replace function public.redeem_promo_code(
   p_code text,
@@ -90,3 +86,26 @@ end;
 $$;
 
 grant execute on function public.redeem_promo_code(text, text, text, text, text) to anon;
+
+-- ============================================
+-- Service bookings (Book a Custom Service)
+-- ============================================
+
+create table if not exists public.service_bookings (
+  id uuid primary key default gen_random_uuid(),
+  service_key text not null,
+  service_label text not null,
+  full_name text not null,
+  phone text not null,
+  details text,
+  status text not null default 'new',
+  created_at timestamptz not null default now()
+);
+
+alter table public.service_bookings enable row level security;
+
+drop policy if exists "Anyone can submit bookings" on public.service_bookings;
+create policy "Anyone can submit bookings"
+  on public.service_bookings for insert
+  to public
+  with check (true);

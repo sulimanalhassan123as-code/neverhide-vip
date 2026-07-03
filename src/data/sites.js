@@ -35,4 +35,12 @@ export const SITES = [
 ];
 
 export const MOMO_NUMBER = '0599931348';
+export const MOMO_NAME = 'Sulley Alhassan';
 export const UNLOCK_PRICE = 10; // GHS
+
+export const SERVICES = [
+  { key: 'security', emoji: '🔒', label: 'Security Website' },
+  { key: 'business', emoji: '💼', label: 'Business Website' },
+  { key: 'payment', emoji: '💳', label: 'Online Payment System' },
+  { key: 'data', emoji: '📊', label: 'Data / Custom App' },
+];

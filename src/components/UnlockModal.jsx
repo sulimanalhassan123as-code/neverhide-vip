@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase, isSupabaseReady } from '../lib/supabase';
-import { MOMO_NUMBER, UNLOCK_PRICE } from '../data/sites';
+import { MOMO_NUMBER, MOMO_NAME, UNLOCK_PRICE } from '../data/sites';
 
 export default function UnlockModal({ site, onClose }) {
   const [step, setStep] = useState(1); // 1 = payment info, 2 = pay form, 3 = success, 4 = promo form, 5 = promo success
@@ -85,7 +85,7 @@ export default function UnlockModal({ site, onClose }) {
               }}>
                 {MOMO_NUMBER}
               </div>
-              <p style={{ color: '#a7afc5', fontSize: 12, margin: 0 }}>Name on account: Never Hide Tech Empire</p>
+              <p style={{ color: '#a7afc5', fontSize: 12, margin: 0 }}>Name on account: {MOMO_NAME}</p>
             </div>
             <p style={{ color: '#a7afc5', fontSize: 12.5, marginBottom: 14 }}>
               <b>Step 2.</b> Fill your details next — we verify and approve within minutes and message you on WhatsApp the second it's active.

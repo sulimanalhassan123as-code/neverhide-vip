@@ -1,8 +1,64 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background: #070a12;
+  background: #05030a;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
-input::placeholder { color: #5c6785; }
+input::placeholder, textarea::placeholder { color: #7a6f4d; }
 a { color: inherit; }
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.15; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1.4); }
+}
+.star-particle {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff3cf 0%, #ffcc33 45%, transparent 80%);
+  animation: twinkle 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes floatUp {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-16px); }
+  100% { transform: translateY(0px); }
+}
+.float-orb { animation: floatUp 6s ease-in-out infinite; }
+
+@keyframes cardPopIn {
+  0% { opacity: 0; transform: scale(0.75) translateY(50px) rotateX(18deg); }
+  60% { opacity: 1; transform: scale(1.05) translateY(-8px) rotateX(-3deg); }
+  100% { opacity: 1; transform: scale(1) translateY(0) rotateX(0deg); }
+}
+.card-pop-in {
+  animation: cardPopIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes shimmerSweep {
+  0% { transform: translateX(-130%) rotate(15deg); }
+  100% { transform: translateX(230%) rotate(15deg); }
+}
+.shimmer-sweep {
+  position: absolute;
+  top: -50%;
+  left: 0;
+  width: 40%;
+  height: 200%;
+  background: linear-gradient(90deg, transparent, rgba(255,219,122,0.4), transparent);
+  animation: shimmerSweep 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes goldPulse {
+  0%, 100% { box-shadow: 0 0 26px rgba(255,204,51,0.28), 0 0 0 1px rgba(255,204,51,0.28); }
+  50% { box-shadow: 0 0 48px rgba(255,204,51,0.5), 0 0 0 1px rgba(255,204,51,0.45); }
+}
+.gold-pulse { animation: goldPulse 3s ease-in-out infinite; }
+
+@keyframes sparkleSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.sparkle-spin { animation: sparkleSpin 9s linear infinite; display: inline-block; }

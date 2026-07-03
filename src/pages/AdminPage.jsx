@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { supabaseAdmin, isSupabaseReady } from '../lib/supabase';
-import { SITES } from '../data/sites';
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'neverhide2024';
 
@@ -15,10 +14,12 @@ export default function AdminPage() {
   const [authed, setAuthed] = useState(sessionStorage.getItem('vip_admin_ok') === '1');
   const [pw, setPw] = useState('');
   const [error, setError] = useState('');
-  const [tab, setTab] = useState('requests'); // requests | promos
+  const [tab, setTab] = useState('requests'); // requests | promos | bookings
   const [requests, setRequests] = useState([]);
   const [promos, setPromos] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const [filter, setFilter] = useState('pending');
+  const [bookingFilter, setBookingFilter] = useState('new');
   const [loading, setLoading] = useState(false);
 
   // new promo form
@@ -51,9 +52,19 @@ export default function AdminPage() {
     setLoading(false);
   };
 
+  const loadBookings = async () => {
+    if (!isSupabaseReady) return;
+    setLoading(true);
+    const { data } = await supabaseAdmin.from('service_bookings').select('*').order('created_at', { ascending: false });
+    setBookings(data || []);
+    setLoading(false);
+  };
+
   useEffect(() => {
     if (!authed) return;
-    if (tab === 'requests') loadRequests(); else loadPromos();
+    if (tab === 'requests') loadRequests();
+    else if (tab === 'promos') loadPromos();
+    else loadBookings();
   }, [authed, tab]);
 
   const approve = async (r) => {
@@ -82,11 +93,22 @@ export default function AdminPage() {
     loadPromos();
   };
 
+  const setBookingStatus = async (b, status) => {
+    await supabaseAdmin.from('service_bookings').update({ status }).eq('id', b.id);
+    loadBookings();
+  };
+
   const waLink = (r, approvedNow) => {
     const msg = approvedNow
       ? `Hi ${r.full_name}! 🎉 Your VIP access to ${r.site_name} is now ACTIVE for the next 24 hours. Enjoy! - Never Hide Tech Empire`
       : `Hi ${r.full_name}, following up on your VIP access request for ${r.site_name}.`;
     const phone = r.phone.replace(/[^0-9]/g, '');
+    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  };
+
+  const bookingWaLink = (b) => {
+    const msg = `Hi ${b.full_name}! This is Never Hide Tech Empire following up on your ${b.service_label} request. Let's schedule a time to discuss your project.`;
+    const phone = b.phone.replace(/[^0-9]/g, '');
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   };
 
@@ -112,13 +134,17 @@ export default function AdminPage() {
   const counts = { pending: 0, approved: 0, rejected: 0 };
   requests.forEach(r => { if (counts[r.status] !== undefined) counts[r.status]++; });
 
+  const filteredBookings = bookings.filter(b => bookingFilter === 'all' ? true : b.status === bookingFilter);
+  const bCounts = { new: 0, contacted: 0, done: 0 };
+  bookings.forEach(b => { if (bCounts[b.status] !== undefined) bCounts[b.status]++; });
+
   return (
     <div style={{ minHeight: '100vh', background: '#070a12', padding: '24px 16px 60px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
         <h2 style={{ color: '#fff', marginBottom: 4 }}>🎟️ VIP Access Admin</h2>
-        <p style={{ color: '#8891a8', fontSize: 13, marginBottom: 18 }}>Approve payments, or create free promo codes to give away.</p>
+        <p style={{ color: '#8891a8', fontSize: 13, marginBottom: 18 }}>Approve payments, manage promo codes, and track service bookings.</p>
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
           <button onClick={() => setTab('requests')} style={{
             border: '1px solid #2a3350', borderRadius: 20, padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontWeight: 700,
             background: tab === 'requests' ? '#3ba7ff' : '#151b2c', color: tab === 'requests' ? '#08110a' : '#c9d1e0',
@@ -127,6 +153,10 @@ export default function AdminPage() {
             border: '1px solid #2a3350', borderRadius: 20, padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontWeight: 700,
             background: tab === 'promos' ? '#34c471' : '#151b2c', color: tab === 'promos' ? '#08110a' : '#c9d1e0',
           }}>🎟️ Promo Codes</button>
+          <button onClick={() => setTab('bookings')} style={{
+            border: '1px solid #2a3350', borderRadius: 20, padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontWeight: 700,
+            background: tab === 'bookings' ? '#ffcc33' : '#151b2c', color: tab === 'bookings' ? '#241804' : '#c9d1e0',
+          }}>📅 Bookings</button>
         </div>
 
         {tab === 'requests' && (
@@ -234,6 +264,67 @@ export default function AdminPage() {
                     <button onClick={() => deletePromo(p)} style={{ border: '1px solid #ff6b6b55', borderRadius: 10, padding: '7px 12px', background: 'transparent', color: '#ff6b6b', fontSize: 12, cursor: 'pointer' }}>
                       Delete
                     </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {tab === 'bookings' && (
+          <>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
+              {['new', 'contacted', 'done', 'all'].map(f => (
+                <button key={f} onClick={() => setBookingFilter(f)} style={{
+                  border: '1px solid #2a3350', borderRadius: 20, padding: '8px 16px', fontSize: 13, cursor: 'pointer',
+                  background: bookingFilter === f ? '#ffcc33' : '#151b2c', color: bookingFilter === f ? '#241804' : '#c9d1e0', fontWeight: 700,
+                }}>
+                  {f === 'new' ? `🆕 New (${bCounts.new})` : f === 'contacted' ? `📞 Contacted (${bCounts.contacted})` : f === 'done' ? `✅ Done (${bCounts.done})` : `All (${bookings.length})`}
+                </button>
+              ))}
+              <button onClick={loadBookings} style={{ border: '1px solid #2a3350', borderRadius: 20, padding: '8px 16px', fontSize: 13, cursor: 'pointer', background: '#151b2c', color: '#c9d1e0' }}>
+                ↻ Refresh
+              </button>
+            </div>
+
+            {loading && <p style={{ color: '#8891a8' }}>Loading...</p>}
+            {!loading && filteredBookings.length === 0 && <p style={{ color: '#8891a8' }}>No bookings here.</p>}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {filteredBookings.map(b => (
+                <div key={b.id} style={{ background: '#0d1220', border: '1px solid #2a3350', borderRadius: 16, padding: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <span style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>{b.full_name}</span>
+                      <span style={{ color: '#8891a8', fontSize: 12.5, marginLeft: 8 }}>{b.phone}</span>
+                    </div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 12,
+                      background: b.status === 'new' ? '#ffb34722' : b.status === 'contacted' ? '#3ba7ff22' : '#34c47122',
+                      color: b.status === 'new' ? '#ffb347' : b.status === 'contacted' ? '#3ba7ff' : '#34c471',
+                    }}>{b.status.toUpperCase()}</span>
+                  </div>
+                  <div style={{ color: '#c9d1e0', fontSize: 13, marginBottom: 4 }}>🛠️ {b.service_label}</div>
+                  {b.details && <div style={{ color: '#a7afc5', fontSize: 12.5, marginBottom: 6, fontStyle: 'italic' }}>"{b.details}"</div>}
+                  <div style={{ color: '#8891a8', fontSize: 11.5, marginBottom: 10 }}>
+                    Requested {new Date(b.created_at).toLocaleString()}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {b.status === 'new' && (
+                      <button onClick={() => setBookingStatus(b, 'contacted')} style={{ border: 'none', borderRadius: 10, padding: '8px 14px', background: '#3ba7ff', color: '#08110a', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
+                        📞 Mark Contacted
+                      </button>
+                    )}
+                    {b.status !== 'done' && (
+                      <button onClick={() => setBookingStatus(b, 'done')} style={{ border: 'none', borderRadius: 10, padding: '8px 14px', background: '#34c471', color: '#08110a', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
+                        ✅ Mark Done
+                      </button>
+                    )}
+                    <a href={bookingWaLink(b)} target="_blank" rel="noreferrer" style={{
+                      border: '1px solid #34c47155', borderRadius: 10, padding: '8px 14px', color: '#34c471', fontWeight: 700, fontSize: 12.5, textDecoration: 'none',
+                    }}>
+                      💬 WhatsApp
+                    </a>
                   </div>
                 </div>
               ))}
