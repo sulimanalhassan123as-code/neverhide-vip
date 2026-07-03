@@ -1,0 +1,8 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: #070a12;
+  -webkit-font-smoothing: antialiased;
+}
+input::placeholder { color: #5c6785; }
+a { color: inherit; }
