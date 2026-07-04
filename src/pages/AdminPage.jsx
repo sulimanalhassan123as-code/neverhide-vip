@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabaseAdmin, isSupabaseReady } from '../lib/supabase';
-
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'neverhide2024';
+import { adminApi } from '../lib/supabase';
 
 function genCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -11,8 +9,10 @@ function genCode() {
 }
 
 export default function AdminPage() {
-  const [authed, setAuthed] = useState(sessionStorage.getItem('vip_admin_ok') === '1');
-  const [pw, setPw] = useState('');
+  const [pwInput, setPwInput] = useState('');
+  const [pw, setPw] = useState(() => sessionStorage.getItem('vip_admin_pw') || '');
+  const [authed, setAuthed] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(!!pw);
   const [error, setError] = useState('');
   const [tab, setTab] = useState('requests'); // requests | promos | bookings
   const [requests, setRequests] = useState([]);
@@ -22,42 +22,42 @@ export default function AdminPage() {
   const [bookingFilter, setBookingFilter] = useState('new');
   const [loading, setLoading] = useState(false);
 
-  // new promo form
   const [newCode, setNewCode] = useState('');
   const [newMaxUses, setNewMaxUses] = useState('');
   const [newNote, setNewNote] = useState('');
 
-  const login = () => {
-    if (pw === ADMIN_PASSWORD) {
-      sessionStorage.setItem('vip_admin_ok', '1');
+  // Verify stored password (if any) on mount
+  useEffect(() => {
+    if (!pw) { setCheckingAuth(false); return; }
+    adminApi(pw, 'ping')
+      .then(() => setAuthed(true))
+      .catch(() => { sessionStorage.removeItem('vip_admin_pw'); setPw(''); })
+      .finally(() => setCheckingAuth(false));
+  }, []); // eslint-disable-line
+
+  const login = async () => {
+    setError('');
+    try {
+      await adminApi(pwInput, 'ping');
+      sessionStorage.setItem('vip_admin_pw', pwInput);
+      setPw(pwInput);
       setAuthed(true);
-    } else {
+    } catch {
       setError('Wrong password');
     }
   };
 
   const loadRequests = async () => {
-    if (!isSupabaseReady) return;
     setLoading(true);
-    const { data } = await supabaseAdmin.from('unlock_requests').select('*').order('created_at', { ascending: false });
-    setRequests(data || []);
-    setLoading(false);
+    try { setRequests(await adminApi(pw, 'list_requests') || []); } finally { setLoading(false); }
   };
-
   const loadPromos = async () => {
-    if (!isSupabaseReady) return;
     setLoading(true);
-    const { data } = await supabaseAdmin.from('promo_codes').select('*').order('created_at', { ascending: false });
-    setPromos(data || []);
-    setLoading(false);
+    try { setPromos(await adminApi(pw, 'list_promos') || []); } finally { setLoading(false); }
   };
-
   const loadBookings = async () => {
-    if (!isSupabaseReady) return;
     setLoading(true);
-    const { data } = await supabaseAdmin.from('service_bookings').select('*').order('created_at', { ascending: false });
-    setBookings(data || []);
-    setLoading(false);
+    try { setBookings(await adminApi(pw, 'list_bookings') || []); } finally { setLoading(false); }
   };
 
   useEffect(() => {
@@ -67,36 +67,20 @@ export default function AdminPage() {
     else loadBookings();
   }, [authed, tab]);
 
-  const approve = async (r) => {
-    const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    await supabaseAdmin.from('unlock_requests').update({ status: 'approved', approved_at: new Date().toISOString(), expires_at }).eq('id', r.id);
-    loadRequests();
-  };
-  const reject = async (r) => {
-    await supabaseAdmin.from('unlock_requests').update({ status: 'rejected' }).eq('id', r.id);
-    loadRequests();
-  };
+  const approve = async (r) => { await adminApi(pw, 'approve_request', { id: r.id }); loadRequests(); };
+  const reject = async (r) => { await adminApi(pw, 'reject_request', { id: r.id }); loadRequests(); };
 
   const createPromo = async () => {
     const code = (newCode.trim() || genCode()).toUpperCase();
     const max_uses = newMaxUses.trim() ? parseInt(newMaxUses.trim(), 10) : null;
-    await supabaseAdmin.from('promo_codes').insert([{ code, max_uses, note: newNote.trim() || null, active: true }]);
+    await adminApi(pw, 'create_promo', { code, max_uses, note: newNote.trim() || null });
     setNewCode(''); setNewMaxUses(''); setNewNote('');
     loadPromos();
   };
-  const togglePromo = async (p) => {
-    await supabaseAdmin.from('promo_codes').update({ active: !p.active }).eq('id', p.id);
-    loadPromos();
-  };
-  const deletePromo = async (p) => {
-    await supabaseAdmin.from('promo_codes').delete().eq('id', p.id);
-    loadPromos();
-  };
+  const togglePromo = async (p) => { await adminApi(pw, 'toggle_promo', { id: p.id, active: !p.active }); loadPromos(); };
+  const deletePromo = async (p) => { await adminApi(pw, 'delete_promo', { id: p.id }); loadPromos(); };
 
-  const setBookingStatus = async (b, status) => {
-    await supabaseAdmin.from('service_bookings').update({ status }).eq('id', b.id);
-    loadBookings();
-  };
+  const setBookingStatus = async (b, status) => { await adminApi(pw, 'set_booking_status', { id: b.id, status }); loadBookings(); };
 
   const waLink = (r, approvedNow) => {
     const msg = approvedNow
@@ -112,13 +96,17 @@ export default function AdminPage() {
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   };
 
+  if (checkingAuth) {
+    return <div style={{ minHeight: '100vh', background: '#070a12' }} />;
+  }
+
   if (!authed) {
     return (
       <div style={{ minHeight: '100vh', background: '#070a12', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
         <div style={{ background: '#0d1220', border: '1px solid #2a3350', borderRadius: 20, padding: 30, width: '100%', maxWidth: 340, textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 10 }}>🔐</div>
           <h2 style={{ color: '#fff', margin: '0 0 16px' }}>VIP Admin</h2>
-          <input type="password" placeholder="Admin password" value={pw} onChange={e => setPw(e.target.value)}
+          <input type="password" placeholder="Admin password" value={pwInput} onChange={e => setPwInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && login()}
             style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #2a3350', borderRadius: 10, padding: '12px 14px', background: '#151b2c', color: '#fff', fontSize: 14, marginBottom: 12 }} />
           {error && <p style={{ color: '#ff6b6b', fontSize: 12.5, marginBottom: 10 }}>{error}</p>}
