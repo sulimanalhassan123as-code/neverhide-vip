@@ -11,9 +11,7 @@ export default function TiltCard({ site, onUnlock, index = 0 }) {
     const rect = el.getBoundingClientRect();
     const px = (e.clientX - rect.left) / rect.width;
     const py = (e.clientY - rect.top) / rect.height;
-    const rotateY = (px - 0.5) * 28;
-    const rotateX = (0.5 - py) * 28;
-    setTilt({ x: rotateX, y: rotateY });
+    setTilt({ x: (0.5 - py) * 22, y: (px - 0.5) * 22 });
   };
 
   const reset = () => { setTilt({ x: 0, y: 0 }); setHover(false); };
@@ -25,62 +23,79 @@ export default function TiltCard({ site, onUnlock, index = 0 }) {
       onMouseMove={handleMove}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={reset}
-      style={{ perspective: 1200, WebkitPerspective: 1200, animationDelay: `${index * 0.12}s` }}
+      style={{ perspective: 1100, WebkitPerspective: 1100, animationDelay: `${index * 0.12}s` }}
     >
       <div
         className={hover ? 'gold-pulse' : ''}
         style={{
-          transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${hover ? 1.06 : 1})`,
+          transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${hover ? 1.05 : 1})`,
           transition: hover ? 'transform 0.05s linear' : 'transform 0.5s cubic-bezier(0.22,1,0.36,1)',
-          background: `linear-gradient(155deg, ${site.color} 0%, #0a0603 100%)`,
-          borderRadius: 24,
-          padding: 26,
-          border: `1.5px solid ${site.accent}66`,
+          background: `linear-gradient(160deg, ${site.color} 0%, #060402 100%)`,
+          borderRadius: 24, padding: '28px 24px',
+          border: `1.5px solid ${site.accent}55`,
           boxShadow: hover
-            ? `0 30px 60px -12px ${site.accent}77, 0 0 40px rgba(255,204,51,0.25)`
-            : '0 12px 34px rgba(0,0,0,0.45), 0 0 20px rgba(255,204,51,0.08)',
+            ? `0 28px 55px -10px ${site.accent}66, 0 0 35px rgba(255,204,51,0.18)`
+            : '0 10px 30px rgba(0,0,0,0.5)',
           transformStyle: 'preserve-3d',
-          position: 'relative',
-          overflow: 'hidden',
+          position: 'relative', overflow: 'hidden',
         }}
       >
         {hover && <div className="shimmer-sweep" />}
 
-        <div style={{ position: 'absolute', top: -40, right: -40, width: 140, height: 140, borderRadius: '50%', background: `${site.accent}22`, filter: 'blur(20px)' }} />
-        <div className="sparkle-spin" style={{ position: 'absolute', top: 14, right: 16, fontSize: 18, opacity: 0.75 }}>💎</div>
+        {/* Glow blob */}
+        <div style={{ position: 'absolute', top: -50, right: -50, width: 160, height: 160, borderRadius: '50%', background: `${site.accent}1a`, filter: 'blur(30px)', pointerEvents: 'none' }} />
 
-        <div style={{ fontSize: 54, marginBottom: 10, transform: 'translateZ(40px)' }}>{site.emoji}</div>
-        <h3 style={{ color: '#fff', fontSize: 22, margin: '0 0 4px', transform: 'translateZ(30px)' }}>{site.name}</h3>
-        <div style={{ color: site.accent, fontSize: 12, fontWeight: 700, letterSpacing: 0.5, marginBottom: 10, transform: 'translateZ(30px)' }}>
-          {site.tagline.toUpperCase()}
+        {/* Badge */}
+        <div style={{
+          position: 'absolute', top: 16, right: 16,
+          fontSize: 10, fontWeight: 800, letterSpacing: 1,
+          background: `${site.accent}22`, border: `1px solid ${site.accent}55`,
+          color: site.accent, borderRadius: 8, padding: '3px 8px',
+        }}>{site.badge}</div>
+
+        {/* Icon */}
+        <div style={{ fontSize: 52, marginBottom: 12, transform: 'translateZ(35px)' }}>{site.emoji}</div>
+
+        {/* Title */}
+        <h3 style={{ color: '#fff', fontSize: 21, margin: '0 0 4px', fontWeight: 900, transform: 'translateZ(28px)' }}>{site.name}</h3>
+        <div style={{ color: site.accent, fontSize: 11, fontWeight: 700, letterSpacing: 1, marginBottom: 12, transform: 'translateZ(28px)', textTransform: 'uppercase' }}>
+          {site.tagline}
         </div>
-        <p style={{ color: '#d9cfa8', fontSize: 13.5, lineHeight: 1.5, marginBottom: 12, transform: 'translateZ(20px)' }}>
+
+        {/* Description */}
+        <p style={{ color: '#c9bfa0', fontSize: 13.5, lineHeight: 1.55, marginBottom: 14, transform: 'translateZ(18px)' }}>
           {site.description}
         </p>
+
+        {/* VIP perks list */}
         <div style={{
-          background: `${site.accent}18`, border: `1px solid ${site.accent}44`, borderRadius: 12,
-          padding: '10px 12px', fontSize: 12, color: site.accent, marginBottom: 16, transform: 'translateZ(20px)',
+          background: `${site.accent}12`, border: `1px solid ${site.accent}33`,
+          borderRadius: 12, padding: '10px 12px', marginBottom: 18, transform: 'translateZ(18px)',
         }}>
-          ✨ {site.perk}
+          <div style={{ fontSize: 10, fontWeight: 800, color: site.accent, letterSpacing: 1, marginBottom: 7, textTransform: 'uppercase' }}>VIP Unlocks</div>
+          {(site.perks || []).map((p, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: i < site.perks.length - 1 ? 5 : 0 }}>
+              <span style={{ color: site.accent, fontSize: 13, flexShrink: 0 }}>✓</span>
+              <span style={{ color: '#d9cfa8', fontSize: 12.5 }}>{p}</span>
+            </div>
+          ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 8, transform: 'translateZ(50px)' }}>
-          <a href={site.url} target="_blank" rel="noreferrer" style={{
-            flex: 1, textAlign: 'center', padding: '11px 0', borderRadius: 12,
-            border: `1px solid ${site.accent}66`, color: '#fff', fontSize: 13, fontWeight: 600,
-            textDecoration: 'none', background: 'rgba(255,255,255,0.06)',
-          }}>
-            Visit Free →
-          </a>
-          <button onClick={() => onUnlock(site)} style={{
-            flex: 1.4, border: 'none', borderRadius: 12, padding: '11px 0',
+        {/* CTA — paid only, no free visit link */}
+        <button
+          onClick={() => onUnlock(site)}
+          style={{
+            width: '100%', border: 'none', borderRadius: 13, padding: '13px 0',
             background: `linear-gradient(135deg, ${site.accent}, ${site.accent}cc)`,
-            color: '#08110a', fontWeight: 800, fontSize: 13, cursor: 'pointer',
-            boxShadow: `0 6px 18px ${site.accent}55`,
-          }}>
-            🔓 Unlock 24H · GHS {10}
-          </button>
-        </div>
+            color: '#050a0e', fontWeight: 900, fontSize: 14, cursor: 'pointer',
+            boxShadow: `0 6px 22px ${site.accent}44`, transform: 'translateZ(48px)',
+            transition: 'opacity 0.15s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+        >
+          🔓 Unlock VIP Access — GHS 10
+        </button>
       </div>
     </div>
   );
